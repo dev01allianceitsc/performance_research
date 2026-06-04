@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Server Bench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- env.js: override window.__BACKEND_URL__ to point to Railway backend when hosted on Vercel -->
+  <script src="/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+/* ─── Reset ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ─── DESIGN.md tokens ──────────────────────────────────────── */
+:root{
+  --canvas:      #fffefb; /* warm off-white — NOT pure white */
+  --canvas-soft: #f8f4f0; /* cream surface for cards / inset */
+  --ink:         #201515; /* deep coffee — NOT pure black */
+  --ink-soft:    #2f2a26;
+  --ink-mid:     #36342e;
+  --body:        #605d52;
+  --body-mid:    #939084;
+  --mute:        #c5c0b1;
+  --primary:     #ff4f00; /* Zapier orange — the single accent */
+  --on-primary:  #fffefb;
+
+  /* Spacing — 4 px base */
+  --sp-xxs:2px; --sp-xs:4px; --sp-sm:8px; --sp-md:12px;
+  --sp-lg:16px; --sp-xl:24px; --sp-2xl:32px; --sp-3xl:48px; --sp-4xl:64px;
+
+  /* Radius */
+  --r-sm:6px;    /* inputs */
+  --r-md:12px;   /* buttons + cards — brand signature */
+  --r-pill:9999px; /* status dots / badges only */
+}
+
+/* ─── Base ───────────────────────────────────────────────────── */
+body{
+  background:var(--canvas);
+  color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif;
+  /* body-md: 18px / 400 / 27px */
+  font-size:18px;line-height:27px;font-weight:400;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ─── Typography scale (DESIGN.md) ──────────────────────────── */
+.t-display-xl  {font-size:56px;font-weight:500;line-height:56px;letter-spacing:0}
+.t-display-md  {font-size:32px;font-weight:500;line-height:36px;letter-spacing:1px}
+.t-display-sub-sm{font-size:24px;font-weight:600;line-height:30px;letter-spacing:-0.6px}
+.t-display-xs  {font-size:20px;font-weight:700;line-height:25px;letter-spacing:-0.5px}
+.t-body-lg     {font-size:20px;font-weight:400;line-height:30px;letter-spacing:-0.2px;color:var(--body)}
+.t-body-md     {font-size:18px;font-weight:400;line-height:27px}
+.t-body-sm     {font-size:16px;font-weight:400;line-height:24px}
+.t-body-sm-str {font-size:16px;font-weight:600;line-height:24px}
+.t-caption     {font-size:14px;font-weight:400;line-height:21px;color:var(--body-mid)}
+/* eyebrow-uppercase: 14px/500/14px/1px — DESIGN.md signature label */
+.t-eyebrow     {font-size:14px;font-weight:500;line-height:14px;letter-spacing:1px;text-transform:uppercase;color:var(--body-mid)}
+/* button-md: 18px/600/27px */
+.t-btn-md      {font-size:18px;font-weight:600;line-height:27px}
+/* button-sm: 14.4px/700/14.4px/0.144px */
+.t-btn-sm      {font-size:14.4px;font-weight:700;line-height:14.4px;letter-spacing:0.144px}
+
+/* ─── Layout ─────────────────────────────────────────────────── */
+.container {max-width:1280px;margin:0 auto;padding:0 var(--sp-xl)}
+/* hero-band: canvas + sp-4xl */
+.band      {padding:var(--sp-4xl) var(--sp-xl)}
+/* content-band: canvas-soft + sp-4xl */
+.band-soft {padding:var(--sp-4xl) var(--sp-xl);background:var(--canvas-soft)}
+
+/* 2-col grid */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2xl)}
+/* 3-col grid */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-xl)}
+/* 6-col kpi grid */
+.grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--sp-md)}
+/* 2-col charts */
+.grid2c{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-xl)}
+
+@media(max-width:1023px){
+  .grid6{grid-template-columns:repeat(3,1fr)}
+  .grid2c{grid-template-columns:1fr}
+}
+@media(max-width:767px){
+  .grid2,.grid3,.grid6,.grid2c{grid-template-columns:1fr}
+  .t-display-xl{font-size:36px;line-height:40px}
+  .t-display-md{font-size:24px;line-height:30px}
+}
+
+.stack{display:flex;flex-direction:column;gap:var(--sp-xl)}
+.row  {display:flex;align-items:center;gap:var(--sp-sm)}
+.apart{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--sp-lg)}
+
+/* ─── Buttons (DESIGN.md: r-md, button-md type, md/xl padding) ─ */
+.btn{
+  display:inline-flex;align-items:center;gap:var(--sp-sm);
+  padding:var(--sp-md) var(--sp-xl);      /* 12px 24px */
+  border-radius:var(--r-md);              /* 12px — brand signature */
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:18px;font-weight:600;line-height:27px;
+  border:none;cursor:pointer;
+  transition:opacity .15s;white-space:nowrap;
+}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:not(:disabled):hover{opacity:.85}
+.btn-primary  {background:var(--primary);color:var(--on-primary)}
+.btn-secondary{background:var(--ink);    color:var(--on-primary)}
+/* button-tertiary: canvas bg + 1px ink border */
+.btn-tertiary {background:var(--canvas); color:var(--ink);border:1px solid var(--ink)}
+/* button-sm sizing */
+.btn-sm{padding:var(--sp-sm) var(--sp-lg);font-size:14.4px;font-weight:700;line-height:14.4px;letter-spacing:0.144px}
+.btn-full{width:100%;justify-content:center}
+
+/* ─── Inputs (DESIGN.md text-input: canvas bg, ink border, body-md, md/lg pad, r-sm) */
+.input{
+  display:block;width:100%;
+  padding:var(--sp-md) var(--sp-lg);      /* 12px 16px */
+  border:1px solid var(--ink);
+  border-radius:var(--r-sm);              /* 6px */
+  background:var(--canvas);color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:18px;line-height:27px;
+}
+.input:focus{outline:2px solid var(--primary);outline-offset:2px;border-color:transparent}
+textarea.input{resize:vertical}
+.label{
+  display:block;margin-bottom:var(--sp-sm);
+  font-size:16px;font-weight:600;line-height:24px;color:var(--ink)
+}
+input[type=range]{width:100%;accent-color:var(--primary)}
+
+/* ─── Cards (DESIGN.md card-content: canvas-soft, xl pad, r-md) ─ */
+.card     {background:var(--canvas-soft);border-radius:var(--r-md);padding:var(--sp-xl)}
+/* card-feature-dark: ink bg, on-primary text */
+.card-dark{background:var(--ink);color:var(--on-primary);border-radius:var(--r-md);padding:var(--sp-xl)}
+/* pricing-card: canvas + 1px ink border */
+.card-line{background:var(--canvas);border:1px solid rgba(197,192,177,.5);border-radius:var(--r-md);padding:var(--sp-xl)}
+
+/* ─── Pill toggles (method / NIC presets) ───────────────────── */
+.pills   {display:flex;gap:var(--sp-sm);flex-wrap:wrap}
+.pills2  {display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-sm)}
+.pill{
+  padding:var(--sp-sm) var(--sp-lg);
+  border:1px solid var(--mute);border-radius:var(--r-sm);
+  background:var(--canvas);color:var(--body);
+  font-family:inherit;font-size:16px;font-weight:600;
+  cursor:pointer;transition:all .15s
+}
+.pill.on{background:var(--ink);color:var(--on-primary);border-color:var(--ink)}
+.pill-w{width:100%;text-align:center}
+
+/* ─── nav-bar (DESIGN.md: canvas, ink text, md/xl padding, sticky) */
+nav{
+  background:var(--canvas);
+  border-bottom:1px solid rgba(197,192,177,.45);
+  padding:var(--sp-md) var(--sp-xl);
+  display:flex;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:100
+}
+.nav-brand{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.2px}
+
+/* status dot — r-pill only for this */
+.dot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--mute)}
+.dot.run{background:#22c55e;animation:blink 1.5s ease-in-out infinite}
+.dot.err{background:#ef4444}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ─── Gauge ──────────────────────────────────────────────────── */
+.gauge-bar  {height:16px;background:rgba(197,192,177,.25);border-radius:var(--r-pill);overflow:hidden}
+.gauge-fill {height:100%;border-radius:var(--r-pill);background:var(--primary);transition:width .6s ease}
+.gauge-fill.warn  {background:#f59e0b}
+.gauge-fill.danger{background:#ef4444}
+.gauge-split{height:8px;background:rgba(197,192,177,.2);border-radius:var(--r-pill);overflow:hidden;position:relative}
+.g-dl{position:absolute;top:0;left:0;height:100%;background:rgba(255,79,0,.65);border-radius:var(--r-pill);transition:width .6s}
+.g-ul{position:absolute;top:0;height:100%;background:rgba(32,21,21,.4);border-radius:var(--r-pill);transition:width .6s,left .6s}
+.g-80{position:absolute;top:0;bottom:0;width:1px;left:80%;background:rgba(32,21,21,.18)}
+
+/* ─── KPI card ──────────────────────────────────────────────── */
+.kpi{background:var(--canvas-soft);border-radius:var(--r-md);padding:var(--sp-lg) var(--sp-xl)}
+.kpi-lbl{font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--body-mid);margin-bottom:var(--sp-xs)}
+.kpi-val{font-size:22px;font-weight:700;color:var(--ink);line-height:1.2}
+.kpi-unit{font-size:13px;font-weight:400;color:var(--body-mid)}
+.kpi.accent .kpi-val{color:var(--primary)}
+.kpi.alert  .kpi-val{color:#dc2626}
+
+/* ─── Chart wrapper ─────────────────────────────────────────── */
+.chart-box{background:var(--canvas-soft);border-radius:var(--r-md);padding:var(--sp-xl)}
+.chart-lbl{font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--body-mid);margin-bottom:var(--sp-lg)}
+
+/* ─── Report row ────────────────────────────────────────────── */
+.rrow{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(197,192,177,.3)}
+.rrow:last-child{border:none}
+
+/* ─── Footer (DESIGN.md: ink bg, canvas-soft text, 3xl/xl padding, body-sm) */
+footer{background:var(--ink);color:var(--canvas-soft);padding:var(--sp-3xl) var(--sp-xl)}
+
+/* ─── Error banner ──────────────────────────────────────────── */
+.err-box{background:#fef2f2;border:1px solid #fca5a5;border-radius:var(--r-md);color:#991b1b;padding:var(--sp-lg) var(--sp-xl);display:flex;gap:var(--sp-md);align-items:flex-start}
+
+/* ─── Section visiblity ─────────────────────────────────────── */
+.sec{display:none}.sec.on{display:block}
+
+/* ─── Misc ───────────────────────────────────────────────────── */
+.c-primary{color:var(--primary)} .c-ink{color:var(--ink)} .c-body{color:var(--body)} .c-mute{color:var(--mute)} .c-body-mid{color:var(--body-mid)}
+.c-on-p{color:var(--on-primary)}
+.fw6{font-weight:600} .fw7{font-weight:700}
+.tr{text-align:right}
+code{font-family:monospace;font-size:13px;background:rgba(197,192,177,.3);padding:1px 5px;border-radius:4px}
+.mt-xs{margin-top:var(--sp-xs)} .mt-sm{margin-top:var(--sp-sm)} .mt-md{margin-top:var(--sp-md)}
+.mt-lg{margin-top:var(--sp-lg)} .mt-xl{margin-top:var(--sp-xl)} .mt-2xl{margin-top:var(--sp-2xl)}
+.mb-sm{margin-bottom:var(--sp-sm)} .mb-md{margin-bottom:var(--sp-md)} .mb-lg{margin-bottom:var(--sp-lg)} .mb-xl{margin-bottom:var(--sp-xl)}
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ NAV (canvas bg · md/xl padding · sticky) ══════════════ -->
+<nav>
+  <span class="nav-brand">Server Bench</span>
+  <div class="row">
+    <div class="dot" id="dot"></div>
+    <span class="t-body-sm c-body-mid" id="statusTxt">Sẵn sàng</span>
+  </div>
+</nav>
+
+<!-- ══════════════ HERO (canvas bg · sp-4xl) ═════════════════════════════ -->
+<section id="secHero" class="sec on" style="background:var(--canvas)">
+  <div class="container band">
+    <p class="t-eyebrow mb-lg">Công cụ kiểm tra tải</p>
+    <h1 class="t-display-xl mt-lg" style="max-width:680px">Đo băng thông &amp; khả năng chịu tải máy chủ</h1>
+    <p class="t-body-lg mt-xl" style="max-width:540px">Mô phỏng người dùng đồng thời · đo RPS · độ trễ · băng thông NIC · phát hiện điểm bão hòa theo thời gian thực.</p>
+  </div>
+</section>
+
+<!-- ══════════════ CONFIG (canvas-soft bg · sp-4xl) ══════════════════════ -->
+<section id="secConfig" class="sec on band-soft">
+  <div class="container">
+    <div class="apart mb-2xl mt-lg" style="align-items:flex-start">
+      <div>
+        <p class="t-eyebrow mb-sm">Cấu hình</p>
+        <h2 class="t-display-md">Thiết lập kiểm tra tải</h2>
+      </div>
+      <!-- Quick bandwidth test presets -->
+      <div style="text-align:right">
+        <p class="t-caption mb-sm" style="color:var(--body)">Đo băng thông nhanh:</p>
+        <div class="pills" style="justify-content:flex-end">
+          <button type="button" class="pill" id="presetDl">↓ Download</button>
+          <button type="button" class="pill" id="presetUl">↑ Upload</button>
+        </div>
+        <p class="t-caption mt-xs">Chọn máy đích ở URL trước</p>
+      </div>
+    </div>
+
+    <form id="frmConfig" class="grid2">
+
+      <!-- ─ LEFT ─────────────────────────────────────────────── -->
+      <div class="stack">
+
+        <!-- URL -->
+        <div>
+          <label class="label" for="fUrl">URL mục tiêu</label>
+          <input id="fUrl" type="url" required class="input"
+            placeholder="https://your-server.com/api/health" />
+
+          <!-- LAN IP suggestions -->
+          <div id="lanSuggest" style="margin-top:var(--sp-sm);display:none">
+            <p class="t-caption mb-xs">📡 Dùng LAN IP để traffic chạy qua NIC vật lý (thấy được trong Task Manager):</p>
+            <div class="pills" id="lanPills"></div>
+          </div>
+
+          <!-- Loopback warning -->
+          <div id="loopbackWarn" style="display:none;margin-top:var(--sp-sm);background:#fef3c7;border:1px solid #fcd34d;border-radius:var(--r-sm);padding:var(--sp-sm) var(--sp-md)">
+            <p class="t-caption" style="color:#92400e">
+              ⚠️ <strong>localhost / 127.0.0.1</strong> dùng loopback — traffic không qua NIC vật lý,
+              Task Manager sẽ không thấy tăng. Dùng LAN IP ở trên để đo băng thông thực.
+            </p>
+          </div>
+
+          <p class="t-caption mt-xs">
+            <strong>Đo tải server:</strong> <code>/api/bench</code> (RPS nhỏ) ·
+            <strong>Đo download NIC:</strong> <code>/api/bench/download?bytes=10485760</code> ·
+            <strong>Đo upload NIC:</strong> POST đến <code>/api/bench/upload</code>
+          </p>
+        </div>
+
+        <!-- Method -->
+        <div>
+          <label class="label">Phương thức HTTP</label>
+          <div class="pills" id="methodGroup">
+            <button type="button" class="pill on" data-m="GET">GET</button>
+            <button type="button" class="pill" data-m="POST">POST</button>
+            <button type="button" class="pill" data-m="PUT">PUT</button>
+            <button type="button" class="pill" data-m="HEAD">HEAD</button>
+          </div>
+        </div>
+
+        <!-- Payload (POST/PUT only) -->
+        <div id="bodyWrap" style="display:none">
+          <label class="label">Nội dung yêu cầu</label>
+
+          <!-- Mode toggle -->
+          <div class="pills mb-lg" id="payloadModeGroup">
+            <button type="button" class="pill on" data-pm="auto">⚡ Tự sinh payload</button>
+            <button type="button" class="pill" data-pm="manual">Nhập thủ công</button>
+          </div>
+
+          <!-- Auto: size presets -->
+          <div id="payloadAutoWrap">
+            <div class="pills mb-sm" id="sizePresets">
+              <button type="button" class="pill on" data-sz="1024">1 KB</button>
+              <button type="button" class="pill" data-sz="10240">10 KB</button>
+              <button type="button" class="pill" data-sz="102400">100 KB</button>
+              <button type="button" class="pill" data-sz="1048576">1 MB</button>
+              <button type="button" class="pill" data-sz="10485760">10 MB</button>
+              <button type="button" class="pill" id="szCustomBtn">Tùy chỉnh</button>
+            </div>
+            <div id="szCustomWrap" style="display:none;display:none" class="pills mt-sm" style="align-items:center;gap:var(--sp-sm)">
+              <input id="fSzValue" type="number" min="1" max="100" value="1" class="input" style="width:100px" />
+              <div class="pills" id="szUnitGroup">
+                <button type="button" class="pill on" data-unit="kb">KB</button>
+                <button type="button" class="pill" data-unit="mb">MB</button>
+              </div>
+            </div>
+            <p class="t-caption mt-sm" id="payloadSizeInfo">Hệ thống tự sinh JSON <code>{"data":"xxx…"}</code> đúng <strong>1 KB</strong>. Tính vào băng thông tải lên.</p>
+          </div>
+
+          <!-- Manual: textarea -->
+          <div id="payloadManualWrap" style="display:none">
+            <textarea id="fBody" rows="4" class="input" style="font-family:monospace;font-size:14px" placeholder='{"key":"value"}'></textarea>
+            <p class="t-caption mt-xs">Gửi dạng <code>application/json</code>. Tính vào băng thông tải lên.</p>
+          </div>
+        </div>
+
+        <!-- Max users -->
+        <div>
+          <div class="apart mb-sm">
+            <label class="label" style="margin:0">Số người dùng đồng thời tối đa</label>
+            <span class="t-display-sub-sm c-primary" id="maxUsersLbl">500</span>
+          </div>
+          <!-- quick presets -->
+          <div class="pills mb-sm" id="userPresets">
+            <button type="button" class="pill" data-u="1000">1K</button>
+            <button type="button" class="pill" data-u="5000">5K</button>
+            <button type="button" class="pill" data-u="10000">10K</button>
+            <button type="button" class="pill" data-u="50000">50K</button>
+            <button type="button" class="pill" data-u="100000">100K</button>
+          </div>
+          <input id="fMaxUsers" type="range" min="10" max="100000" step="100" value="500" />
+          <div class="apart t-caption c-mute mt-xs"><span>10</span><span>50.000</span><span>100.000</span></div>
+          <p class="t-caption mt-sm" style="color:var(--body)">⚡ Mỗi worker thread chia sẻ tối đa 100 socket TCP — tăng số người dùng tăng độ tranh chấp kết nối, ép server xử lý hàng đợi.</p>
+        </div>
+
+        <!-- Think time -->
+        <div>
+          <div class="apart mb-sm">
+            <label class="label" style="margin:0">Thời gian chờ giữa yêu cầu</label>
+            <span class="t-body-sm fw6 c-primary" id="thinkLbl">0 ms</span>
+          </div>
+          <input id="fThink" type="range" min="0" max="2000" step="50" value="0" />
+          <p class="t-caption mt-xs">0 ms = áp lực tối đa. Giá trị cao hơn mô phỏng người dùng thực.</p>
+        </div>
+      </div>
+
+      <!-- ─ RIGHT ────────────────────────────────────────────── -->
+      <div class="stack">
+
+        <!-- Duration -->
+        <div>
+          <div class="apart mb-sm">
+            <label class="label" style="margin:0">Thời gian kiểm tra</label>
+            <span class="t-body-sm fw6 c-primary" id="durLbl">60 giây</span>
+          </div>
+          <input id="fDuration" type="range" min="15" max="300" step="15" value="60" />
+          <div class="apart t-caption c-mute mt-xs"><span>15 giây</span><span>2 phút</span><span>5 phút</span></div>
+        </div>
+
+        <!-- Ramp -->
+        <div>
+          <div class="apart mb-sm">
+            <label class="label" style="margin:0">Thời gian tăng tải (ramp-up)</label>
+            <span class="t-body-sm fw6 c-primary" id="rampLbl">15 giây</span>
+          </div>
+          <input id="fRamp" type="range" min="0" max="250" step="5" value="15" />
+          <p class="t-caption mt-xs" id="rampPct">25% thời gian kiểm tra</p>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" id="startBtn" class="btn btn-primary btn-full">▶ Chạy kiểm tra tải</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ══════════════ CONNECTIVITY ERROR BANNER ════════════════════════════ -->
+<div id="connErrBanner" style="display:none;padding:0 var(--sp-xl);margin-top:var(--sp-lg)">
+  <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:var(--r-md);padding:var(--sp-xl)">
+    <p style="font-size:16px;font-weight:700;color:#991b1b;margin-bottom:var(--sp-md)">🔴 Lỗi kết nối 100% — Có thể do Firewall chặn</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-xl)">
+      <div>
+        <p class="t-caption" style="color:#7f1d1d;font-weight:600;margin-bottom:var(--sp-sm)">Nguyên nhân phổ biến:</p>
+        <ul class="t-caption" style="color:#991b1b;padding-left:16px;line-height:22px">
+          <li>Windows Firewall chặn port 3001 inbound</li>
+          <li>URL sai IP hoặc port</li>
+          <li>Server chưa khởi động trên máy đích</li>
+        </ul>
+      </div>
+      <div>
+        <p class="t-caption" style="color:#7f1d1d;font-weight:600;margin-bottom:var(--sp-sm)">Fix: Mở port 3001 (chạy với Admin):</p>
+        <code style="display:block;background:#fee2e2;padding:var(--sp-sm) var(--sp-md);border-radius:var(--r-sm);font-size:12px;color:#7f1d1d;line-height:18px;word-break:break-all">
+          netsh advfirewall firewall add rule name="Server-Bench" dir=in action=allow protocol=TCP localport=3001
+        </code>
+      </div>
+    </div>
+    <div style="margin-top:var(--sp-lg);display:flex;gap:var(--sp-md);align-items:center;flex-wrap:wrap">
+      <button id="pingTestBtn" class="btn btn-tertiary btn-sm">🔍 Kiểm tra kết nối (ping)</button>
+      <span id="pingResult" class="t-caption"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ ERROR BANNER ══════════════════════════════════════════ -->
+<div id="errBanner" style="display:none;padding:0 var(--sp-xl);margin-top:var(--sp-lg)">
+  <div class="err-box">
+    <span style="font-size:20px;flex-shrink:0">⚠️</span>
+    <div>
+      <p class="t-body-sm-str">Đã xảy ra lỗi</p>
+      <p class="t-caption mt-xs" id="errMsg"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ LIVE DASHBOARD (canvas bg · sp-4xl) ═══════════════════ -->
+<section id="secDash" class="sec" style="background:var(--canvas)">
+  <div class="container band">
+    <div class="stack">
+
+      <!-- Header -->
+      <div class="apart">
+        <div>
+          <p class="t-eyebrow mb-sm">Bảng điều khiển trực tiếp</p>
+          <h2 class="t-display-md" id="elapsedLbl">0 giây đã trôi qua</h2>
+        </div>
+        <button id="stopBtn" class="btn btn-secondary">■ Dừng kiểm tra</button>
+      </div>
+
+      <!-- Diagnostic bar: target URL + live error messages -->
+      <div style="background:var(--canvas-soft);border-radius:var(--r-md);padding:var(--sp-md) var(--sp-xl);display:flex;flex-wrap:wrap;gap:var(--sp-lg);align-items:center">
+        <div class="row" style="gap:var(--sp-sm)">
+          <span class="t-caption" style="color:var(--body-mid)">Đang gửi vào:</span>
+          <code style="font-size:13px;color:var(--ink);background:rgba(197,192,177,.3);padding:2px 8px;border-radius:4px" id="diagUrl">—</code>
+        </div>
+        <div id="diagErrWrap" style="display:none;flex:1;min-width:200px">
+          <span class="t-caption" style="color:#dc2626;font-weight:600">Lỗi: </span>
+          <code id="diagErr" style="font-size:12px;color:#dc2626;background:#fef2f2;padding:2px 8px;border-radius:4px;word-break:break-all"></code>
+        </div>
+        <div id="diagOkWrap" style="display:none">
+          <span class="t-caption" style="color:#16a34a;font-weight:600">✓ Kết nối OK</span>
+        </div>
+      </div>
+
+      <!-- Gauge (card-content) -->
+      <div class="card">
+        <div class="apart mb-xl">
+          <p class="t-eyebrow">Băng thông quan sát — NIC máy chủ</p>
+          <span class="t-display-sub-sm c-primary" id="gTot">0 Mbps</span>
+        </div>
+
+        <!-- Thanh tổng: auto-scale theo peak đo được -->
+        <div class="gauge-bar mb-xs"><div class="gauge-fill" id="gFill" style="width:0%"></div></div>
+        <!-- DL / UL split -->
+        <div class="gauge-split mt-xs mb-xl">
+          <div class="g-dl" id="gDl" style="width:0%"></div>
+          <div class="g-ul" id="gUl" style="width:0%;left:0%"></div>
+        </div>
+
+        <div class="apart t-caption c-mute mb-xl">
+          <span>0</span>
+          <span>Đỉnh: <strong id="gPeakLbl" style="color:var(--ink)">—</strong></span>
+        </div>
+
+        <div class="grid3">
+          <div>
+            <p class="t-caption">↓ Tải xuống (ra ngoài)</p>
+            <p class="t-display-xs c-primary mt-xs" id="gDlVal">0 Mbps</p>
+            <p class="t-caption mt-xs">server → client</p>
+          </div>
+          <div>
+            <p class="t-caption">↑ Tải lên (vào trong)</p>
+            <p class="t-display-xs c-ink mt-xs" id="gUlVal">0 Mbps</p>
+            <p class="t-caption mt-xs">client → server</p>
+          </div>
+          <div class="tr">
+            <p class="t-caption">Băng thông/user</p>
+            <p class="t-display-xs mt-xs" id="gBwPerUser">—</p>
+            <p class="t-caption c-mute mt-xs">ước lượng tự động</p>
+          </div>
+        </div>
+
+        <p class="t-body-sm fw6 mt-xl" id="gStatus" style="color:var(--body-mid)">Đang chờ dữ liệu…</p>
+
+        <!-- Loopback warning inside gauge -->
+        <div id="gLoopbackWarn" style="display:none;margin-top:var(--sp-lg);background:#fef3c7;border:1px solid #fcd34d;border-radius:var(--r-sm);padding:var(--sp-md) var(--sp-lg)">
+          <p style="font-size:15px;font-weight:700;color:#92400e;margin-bottom:6px">⚠ Đây là tốc độ RAM, không phải băng thông NIC 1 Gbps của bạn</p>
+          <p class="t-caption" style="color:#92400e;line-height:20px">
+            <strong>localhost / 127.0.0.1</strong> dùng loopback — gói tin không rời khỏi CPU, đi thẳng vào RAM.
+            RAM hiện đại đạt 30–50 Gbps nên tool báo con số đó — KHÔNG phải tốc độ Ethernet.<br><br>
+            <strong>Để đo băng thông NIC thật (≤ 1 Gbps):</strong><br>
+            Cài Server Bench trên <strong>Máy B</strong>, điền URL = <code>http://[IP Máy A]:3001/api/bench/download</code>,
+            rồi chạy test. Lúc đó traffic mới chạy qua cáp Ethernet và Task Manager mới thấy NIC tăng.
+          </p>
+        </div>
+      </div>
+
+      <!-- KPI grid -->
+      <div class="grid6">
+        <div class="kpi accent"><div class="kpi-lbl">Yêu cầu/giây</div><div class="kpi-val" id="kRps">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Người dùng</div><div class="kpi-val" id="kUsers">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Độ trễ p95</div><div class="kpi-val" id="kP95">—<span class="kpi-unit"> ms</span></div></div>
+        <div class="kpi"><div class="kpi-lbl">Độ trễ p99</div><div class="kpi-val" id="kP99">—<span class="kpi-unit"> ms</span></div></div>
+        <div class="kpi" id="kErrCard"><div class="kpi-lbl">Tỷ lệ lỗi</div><div class="kpi-val" id="kErr">—<span class="kpi-unit"> %</span></div></div>
+        <div class="kpi"><div class="kpi-lbl">Tổng yêu cầu</div><div class="kpi-val" id="kTot">—</div></div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid2c">
+        <div class="chart-box"><p class="chart-lbl">Băng thông (Mbps)</p><canvas id="cBw" height="200"></canvas></div>
+        <div class="chart-box"><p class="chart-lbl">Độ trễ (ms)</p><canvas id="cLat" height="200"></canvas></div>
+        <div class="chart-box"><p class="chart-lbl">Yêu cầu / giây</p><canvas id="cRps" height="160"></canvas></div>
+        <div class="chart-box"><p class="chart-lbl">Người dùng hoạt động</p><canvas id="cUsers" height="160"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ CAPACITY REPORT (canvas-soft · sp-4xl) ════════════════ -->
+<section id="secReport" class="sec band-soft">
+  <div class="container">
+    <div class="stack">
+
+      <!-- Header -->
+      <div class="apart">
+        <div>
+          <p class="t-eyebrow mb-sm">Kiểm tra hoàn tất</p>
+          <h2 class="t-display-md">Báo cáo dung lượng</h2>
+          <p class="t-caption mt-sm" id="rUrl"></p>
+        </div>
+        <button id="newTestBtn" class="btn btn-tertiary btn-sm">↺ Kiểm tra mới</button>
+      </div>
+
+      <!-- Verdict (card-feature-dark: ink bg) -->
+      <div class="card-dark">
+        <div class="row mb-lg" style="gap:var(--sp-md)">
+          <span id="rIcon" style="font-size:20px">✅</span>
+          <p id="rVerdict" class="t-body-md fw6" style="color:#4ade80"></p>
+        </div>
+        <p id="rDesc" class="t-caption mb-2xl" style="color:rgba(255,254,251,.45)"></p>
+        <div class="grid3">
+          <div>
+            <p class="t-caption" style="color:rgba(255,254,251,.45);text-transform:uppercase;letter-spacing:.5px">Ước tính người dùng tối đa</p>
+            <p class="t-display-sub-sm c-primary mt-sm" id="rEst">—</p>
+            <p class="t-caption mt-xs" style="color:rgba(255,254,251,.3)">với cấu hình hiện tại</p>
+          </div>
+          <div>
+            <p class="t-caption" style="color:rgba(255,254,251,.45);text-transform:uppercase;letter-spacing:.5px">Đỉnh RPS</p>
+            <p class="t-display-sub-sm c-on-p mt-sm" id="rPeakRps">—</p>
+            <p class="t-caption mt-xs" style="color:rgba(255,254,251,.3)">yêu cầu / giây</p>
+          </div>
+          <div>
+            <p class="t-caption" style="color:rgba(255,254,251,.45);text-transform:uppercase;letter-spacing:.5px">Băng thông đỉnh</p>
+            <p class="t-display-sub-sm c-on-p mt-sm" id="rPeakBw">—</p>
+            <p class="t-caption mt-xs" id="rBwBreak" style="color:rgba(255,254,251,.3)"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI grid -->
+      <div class="grid6">
+        <div class="kpi"><div class="kpi-lbl">Tổng yêu cầu</div><div class="kpi-val" id="rTotalReq">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Tổng lỗi</div><div class="kpi-val" id="rTotalErr">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Tỷ lệ lỗi đỉnh</div><div class="kpi-val" id="rPeakErr">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Độ trễ p95 max</div><div class="kpi-val" id="rMaxP95">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Kích thước TB/req</div><div class="kpi-val" id="rAvgBytes">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Người dùng bão hòa</div><div class="kpi-val" id="rSatUsers">—</div></div>
+      </div>
+
+      <!-- Scale card (pricing-card style: canvas + ink border) -->
+      <div id="rScaleCard" class="card-line" style="display:none">
+        <p class="t-eyebrow mb-xl">Để đạt 300.000 người dùng — Đề xuất cấu hình</p>
+        <div class="grid2" style="gap:var(--sp-xl)">
+          <div>
+            <div class="rrow"><span class="t-body-sm c-body">Hệ số mở rộng cần thiết</span><span class="t-body-sm-str c-primary" id="rScale">—</span></div>
+            <div class="rrow"><span class="t-body-sm c-body">Băng thông NIC yêu cầu</span><span class="t-body-sm-str c-primary" id="rNic">—</span></div>
+            <div class="rrow"><span class="t-body-sm c-body">Ước tính tải (RPS)</span><span class="t-body-sm-str" id="rReqRps">—</span></div>
+          </div>
+          <div class="card">
+            <p class="t-body-sm-str mb-sm">Cách tính</p>
+            <p class="t-caption c-body" style="line-height:21px" id="rCalc"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline charts -->
+      <div>
+        <p class="t-eyebrow mb-2xl">Toàn bộ quá trình kiểm tra</p>
+        <div class="grid2c">
+          <div class="chart-box"><p class="chart-lbl">Băng thông (Mbps)</p><canvas id="rCBw" height="200"></canvas></div>
+          <div class="chart-box"><p class="chart-lbl">Độ trễ (ms)</p><canvas id="rCLat" height="200"></canvas></div>
+          <div class="chart-box"><p class="chart-lbl">Yêu cầu / giây</p><canvas id="rCRps" height="160"></canvas></div>
+          <div class="chart-box"><p class="chart-lbl">Người dùng hoạt động</p><canvas id="rCUsers" height="160"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ FOOTER (ink bg · canvas-soft text · 3xl/xl padding) ═══ -->
+<footer>
+  <div class="container apart">
+    <span class="t-body-sm-str" style="color:var(--canvas-soft)">Server Bench</span>
+    <span class="t-body-sm" style="color:var(--mute)">Kiểm tra tải · Băng thông · Dung lượng máy chủ</span>
+  </div>
+</footer>
+
+<script>
+/* ── Helpers ─────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const vi  = (n,d=0) => typeof n==='number'?n.toLocaleString('vi-VN',{maximumFractionDigits:d}):'—';
+const bw  = n => { if(typeof n!=='number') return '—'; return n>=1000?(n/1000).toFixed(2)+' Gbps':n.toFixed(1)+' Mbps'; };
+const ft  = ts => { const d=new Date(ts); return d.getMinutes().toString().padStart(2,'0')+':'+d.getSeconds().toString().padStart(2,'0'); };
+
+/* ── State ───────────────────────────────────────────────────── */
+let phase='idle', metrics=[], ws=null, lc={}, rc={};
+let elapsed=0, etimer=null, totalReqs=0;
+let selMethod='GET', peakBw=0;
+let payloadMode='auto', payloadSizeBytes=1024; // auto-gen payload state
+
+/* ── Backend URL (configurable for split Vercel+Railway deployment) ── */
+const _backendBase = (window.__BACKEND_URL__ || '').replace(/\/$/, '') ||
+  `${location.protocol}//${location.hostname}${location.port ? ':'+location.port : ''}`;
+const API_BASE = _backendBase;
+const WS_URL   = _backendBase.replace(/^http/, 'ws');
+function connectWS(){
+  if(ws?.readyState===WebSocket.OPEN) return;
+  try{
+    ws=new WebSocket(WS_URL);
+    ws.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==='metrics')onMetrics(m.data);else if(m.type==='complete')onComplete(m.data);else if(m.type==='error')onError(m.data.message);}catch{}};
+    ws.onclose=()=>setTimeout(connectWS,2000);
+  }catch{}
+}
+connectWS();
+
+/* ── Form wiring ─────────────────────────────────────────────── */
+const fmtUsers = n => n>=1000?(n/1000).toFixed(n%1000?1:0)+'K':String(n);
+
+$('fMaxUsers').oninput = () => {
+  $('maxUsersLbl').textContent = fmtUsers(+$('fMaxUsers').value);
+  document.querySelectorAll('[data-u]').forEach(b=>b.classList.remove('on'));
+};
+$('fThink').oninput    = () => $('thinkLbl').textContent=$('fThink').value+' ms';
+$('fDuration').oninput = syncDur;
+$('fRamp').oninput     = syncRamp;
+
+function syncDur(){
+  const s=+$('fDuration').value;
+  $('durLbl').textContent=s<60?s+' giây':(s/60).toFixed(1).replace('.0','')+' phút';
+  syncRamp();
+}
+function syncRamp(){
+  const r=+$('fRamp').value,d=+$('fDuration').value;
+  $('rampLbl').textContent=r+' giây';
+  $('rampPct').textContent=d>0?Math.round(r/d*100)+'% thời gian kiểm tra':'';
+  $('fRamp').max=Math.max(d-10,10);
+}
+
+function getTargetBase(){
+  const fromField = $('fUrl').value.match(/^https?:\/\/[^/]+/);
+  if (fromField?.[0]) return fromField[0];
+  return API_BASE || 'http://localhost:3001';
+}
+
+// User presets
+$('userPresets').onclick=e=>{
+  const b=e.target.closest('[data-u]');if(!b)return;
+  const v=+b.dataset.u;
+  $('fMaxUsers').value=v;
+  $('maxUsersLbl').textContent=fmtUsers(v);
+  document.querySelectorAll('[data-u]').forEach(x=>x.classList.toggle('on',x===b));
+};
+
+// Method
+$('methodGroup').onclick=e=>{
+  const b=e.target.closest('[data-m]');if(!b)return;
+  selMethod=b.dataset.m;
+  document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b));
+  $('bodyWrap').style.display=['POST','PUT'].includes(selMethod)?'block':'none';
+};
+
+// Payload mode toggle
+$('payloadModeGroup').onclick=e=>{
+  const b=e.target.closest('[data-pm]');if(!b)return;
+  payloadMode=b.dataset.pm;
+  document.querySelectorAll('[data-pm]').forEach(x=>x.classList.toggle('on',x===b));
+  $('payloadAutoWrap').style.display=  payloadMode==='auto'  ?'block':'none';
+  $('payloadManualWrap').style.display=payloadMode==='manual'?'block':'none';
+};
+
+// Size presets
+$('sizePresets').onclick=e=>{
+  const b=e.target.closest('[data-sz]');if(!b)return;
+  payloadSizeBytes=+b.dataset.sz;
+  document.querySelectorAll('[data-sz]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');$('szCustomBtn').classList.remove('on');
+  $('szCustomWrap').style.display='none';
+  updatePayloadInfo();
+};
+$('szCustomBtn').onclick=()=>{
+  document.querySelectorAll('[data-sz]').forEach(x=>x.classList.remove('on'));
+  $('szCustomBtn').classList.add('on');
+  $('szCustomWrap').style.display='flex';
+  updatePayloadInfo();
+};
+
+// Custom size inputs
+let szUnit='kb';
+$('szUnitGroup').onclick=e=>{
+  const b=e.target.closest('[data-unit]');if(!b)return;
+  szUnit=b.dataset.unit;
+  document.querySelectorAll('[data-unit]').forEach(x=>x.classList.toggle('on',x===b));
+  updateCustomSize();
+};
+$('fSzValue').oninput=updateCustomSize;
+
+function updateCustomSize(){
+  const v=Math.max(1,+$('fSzValue').value||1);
+  payloadSizeBytes=szUnit==='mb'?v*1048576:v*1024;
+  updatePayloadInfo();
+}
+
+function updatePayloadInfo(){
+  const kb=payloadSizeBytes/1024;
+  const lbl=kb>=1024?(kb/1024).toFixed(1)+' MB':kb.toFixed(kb<1?2:0)+' KB';
+  $('payloadSizeInfo').innerHTML=
+    `Hệ thống tự sinh JSON <code>{"data":"xxx…"}</code> đúng <strong>${lbl}</strong>. Tính vào băng thông tải lên.`;
+}
+
+
+/* ── Phase / section ─────────────────────────────────────────── */
+function show(id){
+  ['secHero','secConfig','secDash','secReport'].forEach(s=>$(s).classList.remove('on'));
+  if(id==='secConfig'){$('secHero').classList.add('on');$('secConfig').classList.add('on');}
+  else $(id).classList.add('on');
+}
+function setPhase(p){
+  phase=p;
+  $('dot').className='dot'+(p==='running'?' run':p==='error'?' err':'');
+  $('statusTxt').textContent={idle:'Sẵn sàng',running:'Đang kiểm tra…',complete:'Hoàn tất',error:'Lỗi'}[p]||p;
+  $('startBtn').disabled=p==='running';
+  $('startBtn').textContent=p==='running'?'Đang kiểm tra…':'▶ Chạy kiểm tra tải';
+}
+
+/* ── Submit ──────────────────────────────────────────────────── */
+$('frmConfig').onsubmit=async e=>{
+  e.preventDefault();
+  $('errBanner').style.display='none';
+  metrics=[];totalReqs=0;
+
+  peakBw=0; _highErrWindows=0; showConnError(false);
+  const hasBody=['POST','PUT'].includes(selMethod);
+  const cfg={
+    url:$('fUrl').value, maxUsers:+$('fMaxUsers').value, duration:+$('fDuration').value,
+    rampTime:+$('fRamp').value, method:selMethod, thinkTime:+$('fThink').value,
+    // Payload: auto-gen size OR manual body string
+    payloadSizeBytes: hasBody && payloadMode==='auto'   ? payloadSizeBytes : 0,
+    body:             hasBody && payloadMode==='manual'  ? ($('fBody').value||null) : null,
+  };
+  try{
+    const res=await fetch(`${API_BASE}/api/test/start`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+    if(!res.ok){const j=await res.json().catch(()=>{});throw new Error(j?.error||'Không thể bắt đầu');}
+    setPhase('running');
+    elapsed=0;clearInterval(etimer);
+    etimer=setInterval(()=>{$('elapsedLbl').textContent=(++elapsed)+' giây đã trôi qua';},1000);
+    showLoopbackWarnIfNeeded(cfg.url);
+    $('diagUrl').textContent = cfg.url;
+    $('diagErrWrap').style.display = 'none';
+    $('diagOkWrap').style.display = 'none';
+    initLiveCharts();show('secDash');scrollTo({top:0,behavior:'smooth'});
+  }catch(err){
+    $('errMsg').textContent=err.message;$('errBanner').style.display='block';
+  }
+};
+
+// Ping test: extract host from current test URL and try /api/ping
+$('pingTestBtn').onclick = async () => {
+  const result = $('pingResult');
+  result.textContent = 'Đang kiểm tra…';
+  result.style.color = 'var(--body-mid)';
+  try {
+    const base = (_testUrl.match(/^https?:\/\/[^/]+/) || [API_BASE])[0];
+    const t0 = Date.now();
+    const r = await fetch(`${base}/api/ping`, { signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    const ms = Date.now() - t0;
+    if (j.ok) {
+      result.textContent = `✅ Kết nối OK — ${ms}ms`;
+      result.style.color = '#16a34a';
+    } else {
+      result.textContent = '❌ Server phản hồi lỗi';
+      result.style.color = '#dc2626';
+    }
+  } catch (e) {
+    result.textContent = `❌ Không kết nối được: ${e.message} — kiểm tra Firewall`;
+    result.style.color = '#dc2626';
+  }
+};
+
+$('stopBtn').onclick=async()=>{
+  await fetch(`${API_BASE}/api/test/stop`,{method:'POST'}).catch(()=>{});
+  setPhase('idle');clearInterval(etimer);show('secConfig');scrollTo({top:0,behavior:'smooth'});
+};
+$('newTestBtn').onclick=()=>{
+  setPhase('idle');clearInterval(etimer);destroyCharts(rc);
+  show('secConfig');scrollTo({top:0,behavior:'smooth'});
+};
+
+/* ── Metrics ─────────────────────────────────────────────────── */
+let _testUrl = '';
+let _highErrWindows = 0; // consecutive windows with >90% error
+
+function onMetrics(m){
+  metrics.push(m);totalReqs+=m.requestCount||0;
+  updateGauge(m);updateKpis(m);pushLiveCharts(m);
+
+  // Show live error messages in diagnostic bar
+  if (m.errorMsgs?.length) {
+    $('diagErrWrap').style.display = 'inline-flex';
+    $('diagOkWrap').style.display  = 'none';
+    $('diagErr').textContent = m.errorMsgs.join(' | ');
+  } else if (m.requestCount > 0) {
+    $('diagErrWrap').style.display = 'none';
+    $('diagOkWrap').style.display  = 'inline-flex';
+  }
+
+  // Detect connectivity failure: >90% error for 3+ consecutive windows
+  if ((m.errorRate ?? 0) > 90 && m.requestCount > 0) {
+    _highErrWindows++;
+    if (_highErrWindows >= 3) showConnError(true);
+  } else {
+    _highErrWindows = 0;
+    showConnError(false);
+  }
+}
+
+function showConnError(show) {
+  $('connErrBanner').style.display = show ? 'block' : 'none';
+}
+
+function showLoopbackWarnIfNeeded(url) {
+  _testUrl = url || _testUrl;
+  const warn = isLoopback(_testUrl);
+  const el = $('gLoopbackWarn');
+  if (el) el.style.display = warn ? 'block' : 'none';
+}
+
+// Threshold: >10 Gbps là không thể với NIC vật lý phổ thông → chắc chắn là loopback/RAM
+const LOOPBACK_THRESHOLD_MBPS = 10000;
+
+function updateGauge(m){
+  const cur = m.bandwidthMbps || 0;
+  peakBw = Math.max(peakBw, cur);
+
+  // Phát hiện loopback: URL là localhost HOẶC số đo vượt giới hạn NIC vật lý
+  const loopback = isLoopback(_testUrl) || cur > LOOPBACK_THRESHOLD_MBPS;
+  $('gLoopbackWarn').style.display = loopback ? 'block' : 'none';
+
+  // Khi loopback: đổi tiêu đề gauge để tránh nhầm lẫn với băng thông NIC
+  const gaugeTitle = document.querySelector('#secDash .t-eyebrow');
+  if (gaugeTitle) {
+    gaugeTitle.textContent = loopback
+      ? '⚠ Loopback — tốc độ RAM, không phải NIC'
+      : 'Băng thông quan sát — NIC máy chủ';
+    gaugeTitle.style.color = loopback ? '#d97706' : '';
+  }
+
+  const scale = peakBw > 0 ? peakBw * 1.25 : 1;
+  const pct   = Math.min((cur / scale) * 100, 100);
+  const dlPct = Math.min((m.downloadMbps||0) / scale * 100, 100);
+  const ulPct = Math.min((m.uploadMbps||0)   / scale * 100, 100);
+
+  const fill = $('gFill');
+  fill.style.width = pct + '%';
+  const er = m.errorRate ?? 0, p95 = m.latency?.p95 ?? 0;
+  fill.className = 'gauge-fill' + (loopback ? ' warn' : er > 5 || p95 > 2000 ? ' danger' : er > 1 || p95 > 500 ? ' warn' : '');
+
+  $('gDl').style.width = dlPct + '%';
+  $('gUl').style.left  = dlPct + '%';
+  $('gUl').style.width = ulPct + '%';
+
+  $('gTot').textContent     = bw(cur) + (loopback ? ' (RAM)' : '');
+  $('gDlVal').textContent   = bw(m.downloadMbps);
+  $('gUlVal').textContent   = bw(m.uploadMbps);
+  $('gPeakLbl').textContent = bw(peakBw) + (loopback ? ' (RAM)' : '');
+
+  const activeU = m.activeUsers || 1;
+  const bwPerU  = cur / activeU;
+  $('gBwPerUser').textContent = loopback ? 'N/A (loopback)' :
+    bwPerU < 0.001 ? (bwPerU * 1000).toFixed(2)+' Kbps' : bwPerU.toFixed(3)+' Mbps';
+
+  const s = $('gStatus');
+  if (loopback) {
+    s.textContent = 'Loopback — bytes đi qua RAM, không qua NIC Ethernet';
+    s.style.color = '#d97706';
+  } else if (er > 5 || p95 > 2000) { s.textContent='Bão hòa — lỗi hoặc độ trễ vượt ngưỡng'; s.style.color='#dc2626'; }
+  else if (er > 1 || p95 > 500)    { s.textContent='Áp lực — độ trễ đang tăng';              s.style.color='#d97706'; }
+  else if (cur > 0)                 { s.textContent='Bình thường — đang đo băng thông NIC';   s.style.color='var(--body-mid)'; }
+  else                              { s.textContent='Đang chờ dữ liệu…';                       s.style.color='var(--mute)'; }
+}
+
+function updateKpis(m){
+  $('kRps').innerHTML=vi(m.rps,1)+'<span class="kpi-unit"> req/s</span>';
+  $('kUsers').textContent=vi(m.activeUsers);
+  $('kP95').innerHTML=vi(m.latency?.p95)+'<span class="kpi-unit"> ms</span>';
+  $('kP99').innerHTML=vi(m.latency?.p99)+'<span class="kpi-unit"> ms</span>';
+  const er=m.errorRate??0;
+  $('kErr').innerHTML=vi(er,1)+'<span class="kpi-unit"> %</span>';
+  $('kErrCard').className='kpi'+(er>5?' alert':'');
+  $('kTot').textContent=totalReqs.toLocaleString('vi-VN');
+}
+
+/* ── Charts ──────────────────────────────────────────────────── */
+const C={primary:'#ff4f00',ink:'#201515',body:'#605d52',mute:'#c5c0b1'};
+const CO={
+  animation:false,responsive:true,
+  plugins:{legend:{labels:{color:C.body,font:{size:11},boxWidth:12}}},
+  scales:{
+    x:{ticks:{color:C.body,font:{size:10}},grid:{color:'rgba(197,192,177,.2)'}},
+    y:{ticks:{color:C.body,font:{size:10}},grid:{color:'rgba(197,192,177,.2)'}},
+  },
+};
+
+function mkChart(id,ds,extra={}){
+  return new Chart($(id).getContext('2d'),{type:'line',data:{labels:[],datasets:ds},options:{...CO,...extra}});
+}
+function initLiveCharts(){
+  destroyCharts(lc);
+  lc.bw   =mkChart('cBw',[
+    {label:'↓ Tải xuống',data:[],borderColor:C.primary,backgroundColor:'rgba(255,79,0,.1)',fill:true,borderWidth:2,pointRadius:0,tension:.3},
+    {label:'↑ Tải lên',  data:[],borderColor:C.ink,    backgroundColor:'rgba(32,21,21,.06)',fill:true,borderWidth:1.5,pointRadius:0,tension:.3},
+  ]);
+  lc.lat  =mkChart('cLat',[
+    {label:'Trung bình',data:[],borderColor:C.body,borderWidth:1.5,pointRadius:0,tension:.3},
+    {label:'p95',       data:[],borderColor:C.primary,borderWidth:2,pointRadius:0,tension:.3},
+    {label:'p99',       data:[],borderColor:C.ink,borderWidth:1.5,borderDash:[4,2],pointRadius:0,tension:.3},
+  ]);
+  lc.rps  =mkChart('cRps',  [{label:'RPS',        data:[],borderColor:C.ink,    backgroundColor:'rgba(32,21,21,.06)',fill:true,borderWidth:2,pointRadius:0,tension:.3}]);
+  lc.users=mkChart('cUsers',[{label:'Người dùng', data:[],borderColor:'#2f2a26',backgroundColor:'rgba(47,42,38,.05)',fill:true,borderWidth:2,pointRadius:0,tension:.3}]);
+}
+function destroyCharts(o){Object.values(o).forEach(c=>{try{c.destroy();}catch{}});Object.keys(o).forEach(k=>delete o[k]);}
+function push(c,l,...vs){
+  c.data.labels.push(l);vs.forEach((v,i)=>c.data.datasets[i].data.push(v));
+  if(c.data.labels.length>120){c.data.labels.shift();c.data.datasets.forEach(d=>d.data.shift());}
+  c.update('none');
+}
+function pushLiveCharts(m){
+  const t=ft(m.timestamp);
+  if(lc.bw)    push(lc.bw,   t,m.downloadMbps??0,m.uploadMbps??0);
+  if(lc.lat)   push(lc.lat,  t,m.latency?.avg??0,m.latency?.p95??0,m.latency?.p99??0);
+  if(lc.rps)   push(lc.rps,  t,m.rps??0);
+  if(lc.users) push(lc.users,t,m.activeUsers??0);
+}
+
+/* ── Complete ────────────────────────────────────────────────── */
+function onComplete(data){
+  setPhase('complete');clearInterval(etimer);
+  destroyCharts(lc);show('secReport');renderReport(data);scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderReport({report,windows=[],config}){
+  if(!report) return;
+  $('rUrl').textContent=config?.url||'';
+  const CAUSE={error_rate:'tỷ lệ lỗi > 5%',latency:'độ trễ p95 > 2 giây',rps_plateau:'RPS đạt ngưỡng (CPU/tài nguyên)'};
+  if(report.saturated){
+    $('rIcon').textContent='❌';$('rVerdict').textContent='Bão hòa đạt được';$('rVerdict').style.color='#f87171';
+    $('rDesc').textContent='Máy chủ đạt giới hạn: '+(CAUSE[report.saturationCause]||'không xác định')+'.';
+  }else{
+    $('rIcon').textContent='✅';$('rVerdict').textContent='Hoàn tất sạch — không có bão hòa';$('rVerdict').style.color='#4ade80';
+    $('rDesc').textContent='Không phát hiện bão hòa ở tải tối đa.';
+  }
+  $('rEst').textContent=report.estimatedMaxUsers?.toLocaleString('vi-VN')??'—';
+  $('rPeakRps').textContent=vi(report.peakRps,1);
+  $('rPeakBw').textContent=bw(report.peakBandwidthMbps);
+  $('rBwBreak').textContent=`↓ ${report.peakDownloadMbps?.toFixed(1)} + ↑ ${report.peakUploadMbps?.toFixed(1)} Mbps`;
+
+  const tR=windows.reduce((s,w)=>s+(w.requestCount||0),0);
+  const tE=windows.reduce((s,w)=>s+(w.errorCount||0),0);
+  const pE=Math.max(...windows.map(w=>w.errorRate??0),0);
+  $('rTotalReq').textContent=tR.toLocaleString('vi-VN');
+  $('rTotalErr').textContent=tE.toLocaleString('vi-VN');
+  $('rPeakErr').textContent=pE.toFixed(1)+'%';
+  $('rMaxP95').textContent=(report.maxLatencyP95||0)+' ms';
+  $('rAvgBytes').textContent=report.avgBytesPerRequest>=1024?(report.avgBytesPerRequest/1024).toFixed(1)+' KB':(report.avgBytesPerRequest||0)+' B';
+  $('rSatUsers').textContent=report.saturated?report.saturationUsers?.toLocaleString('vi-VN'):'Không có';
+
+  if(report.scaleFactor!=null){
+    $('rScaleCard').style.display='block';
+    $('rScale').textContent=report.scaleFactor+'×';
+    $('rNic').textContent=report.recommendedNicGbps?report.recommendedNicGbps+' Gbps':'< 1 Gbps';
+    $('rReqRps').textContent=Math.round(report.peakRps*report.scaleFactor).toLocaleString('vi-VN');
+    const bwU = report.bwPerUserMbps < 0.001
+      ? (report.bwPerUserMbps*1000).toFixed(2)+' Kbps'
+      : report.bwPerUserMbps.toFixed(3)+' Mbps';
+    $('rCalc').innerHTML=
+      `Đo được <strong>${vi(report.peakRps,1)} RPS</strong> · băng thông đỉnh <strong>${bw(report.peakBandwidthMbps)}</strong>.
+       Mỗi người dùng tiêu thụ ≈ <strong>${bwU}</strong> băng thông NIC.
+       Để đạt 300.000 người dùng cần NIC <strong>${$('rNic').textContent}</strong>
+       (ước lượng tự động — không cần cấu hình thủ công).`;
+  }
+
+  destroyCharts(rc);
+  const lbs=windows.map(w=>ft(w.timestamp)),ro={...CO,animation:{duration:400}};
+  rc.bw   =new Chart($('rCBw').getContext('2d'),  {type:'line',data:{labels:lbs,datasets:[{label:'↓ Tải xuống',data:windows.map(w=>w.downloadMbps??0),borderColor:C.primary,backgroundColor:'rgba(255,79,0,.1)',fill:true,borderWidth:2,pointRadius:0,tension:.3},{label:'↑ Tải lên',data:windows.map(w=>w.uploadMbps??0),borderColor:C.ink,backgroundColor:'rgba(32,21,21,.06)',fill:true,borderWidth:1.5,pointRadius:0,tension:.3}]},options:ro});
+  rc.lat  =new Chart($('rCLat').getContext('2d'), {type:'line',data:{labels:lbs,datasets:[{label:'TB',data:windows.map(w=>w.latency?.avg??0),borderColor:C.body,borderWidth:1.5,pointRadius:0,tension:.3},{label:'p95',data:windows.map(w=>w.latency?.p95??0),borderColor:C.primary,borderWidth:2,pointRadius:0,tension:.3},{label:'p99',data:windows.map(w=>w.latency?.p99??0),borderColor:C.ink,borderWidth:1.5,borderDash:[4,2],pointRadius:0,tension:.3}]},options:ro});
+  rc.rps  =new Chart($('rCRps').getContext('2d'), {type:'line',data:{labels:lbs,datasets:[{label:'RPS',        data:windows.map(w=>w.rps??0),         borderColor:C.ink,    backgroundColor:'rgba(32,21,21,.06)',fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:ro});
+  rc.users=new Chart($('rCUsers').getContext('2d'),{type:'line',data:{labels:lbs,datasets:[{label:'Người dùng',data:windows.map(w=>w.activeUsers??0), borderColor:'#2f2a26',backgroundColor:'rgba(47,42,38,.05)',fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:ro});
+}
+
+/* ── Error ───────────────────────────────────────────────────── */
+function onError(msg){setPhase('error');$('errMsg').textContent=msg;$('errBanner').style.display='block';}
+
+/* Init */
+syncDur();syncRamp();
+
+// ── Bandwidth test presets ───────────────────────────────────
+// Download preset: GET /api/bench/download?bytes=10MB, 32 users
+$('presetDl').onclick = () => {
+  const base = getTargetBase();
+  $('fUrl').value = `${base}/api/bench/download?bytes=10485760`;
+  // 32 users, 30s duration, no ramp (hit immediately)
+  $('fMaxUsers').value = 32; $('maxUsersLbl').textContent = '32';
+  $('fDuration').value = 30; syncDur();
+  $('fRamp').value = 0; syncRamp();
+  $('fThink').value = 0; $('thinkLbl').textContent = '0 ms';
+  // GET method
+  selMethod = 'GET';
+  document.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('on', x.dataset.m === 'GET'));
+  $('bodyWrap').style.display = 'none';
+  checkLoopback($('fUrl').value);
+  document.querySelectorAll('[data-u]').forEach(x=>x.classList.remove('on'));
+};
+
+// Upload preset: POST /api/bench/upload, 32 users, 10MB body
+$('presetUl').onclick = () => {
+  const base = getTargetBase();
+  $('fUrl').value = `${base}/api/bench/upload`;
+  $('fMaxUsers').value = 32; $('maxUsersLbl').textContent = '32';
+  $('fDuration').value = 30; syncDur();
+  $('fRamp').value = 0; syncRamp();
+  $('fThink').value = 0; $('thinkLbl').textContent = '0 ms';
+  // POST method + 10MB payload
+  selMethod = 'POST';
+  document.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('on', x.dataset.m === 'POST'));
+  $('bodyWrap').style.display = 'block';
+  payloadMode = 'auto'; payloadSizeBytes = 10 * 1024 * 1024;
+  document.querySelectorAll('[data-pm]').forEach(x => x.classList.toggle('on', x.dataset.pm === 'auto'));
+  $('payloadAutoWrap').style.display = 'block';
+  $('payloadManualWrap').style.display = 'none';
+  document.querySelectorAll('[data-sz]').forEach(x => x.classList.remove('on'));
+  $('szCustomBtn').classList.remove('on');
+  // select 10MB preset
+  const btn10m = document.querySelector('[data-sz="10485760"]');
+  if (btn10m) btn10m.classList.add('on');
+  updatePayloadInfo();
+  checkLoopback($('fUrl').value);
+  document.querySelectorAll('[data-u]').forEach(x=>x.classList.remove('on'));
+};
+
+// Default target: prefer the real LAN IP of this server when available,
+// otherwise fall back to the origin currently serving the page.
+const DEFAULT_TARGET = `${API_BASE}/api/bench`;
+$('fUrl').value = DEFAULT_TARGET;
+checkLoopback($('fUrl').value);
+
+// ── LAN IP detection ─────────────────────────────────────────
+(async () => {
+  try {
+    const info = await fetch(`${API_BASE}/api/network-info`).then(r=>r.json());
+    if (info.ips?.length) {
+      const firstLan = info.ips.find(({ address }) => !/^localhost$|^127\.|^0\.0\.0\.0$/.test(address)) || info.ips[0];
+      if (firstLan) $('fUrl').value = `http://${firstLan.address}:${info.port}/api/bench`;
+    }
+    if (!info.ips?.length) return;
+    const pills = $('lanPills');
+    info.ips.forEach(({ address }) => {
+      const b = document.createElement('button');
+      b.type='button'; b.className='pill';
+      b.textContent = address;
+      b.onclick = () => {
+        $('fUrl').value = `http://${address}:${info.port}/api/bench`;
+        checkLoopback($('fUrl').value);
+      };
+      pills.appendChild(b);
+    });
+    $('lanSuggest').style.display = 'block';
+    checkLoopback($('fUrl').value);
+  } catch {}
+})();
+
+function isLoopback(url) {
+  try { const h=new URL(url).hostname; return h==='localhost'||h==='127.0.0.1'||h==='::1'; }
+  catch { return false; }
+}
+function checkLoopback(url) {
+  $('loopbackWarn').style.display = isLoopback(url) ? 'block' : 'none';
+}
+$('fUrl').addEventListener('input', () => checkLoopback($('fUrl').value));
+checkLoopback($('fUrl').value);
+</script>
+</body>
+</html>

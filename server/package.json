@@ -1,0 +1,18 @@
+{
+  "name": "server-bench-backend",
+  "version": "1.0.0",
+  "description": "Server load testing backend",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.17.0",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

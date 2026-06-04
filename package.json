@@ -1,0 +1,15 @@
+{
+  "name": "server-bench",
+  "version": "1.0.0",
+  "description": "Server load testing web app — simulate users, measure bandwidth, estimate capacity",
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client --legacy-peer-deps",
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "dev:backend": "npm run dev --prefix server",
+    "dev:frontend": "npm run dev --prefix client",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  }
+}
